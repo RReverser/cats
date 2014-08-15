@@ -231,9 +231,8 @@ class SourceEditor extends qx.ui.core.Widget implements Editor /* qx.ui.embed.Ht
             // Any pending changes that are not yet send to the worker?
             if (this.pendingWorkerUpdate) this.update();
 
-            IDE.project.iSense.autoComplete(cursor, this.session.name, 
-            (err, completes:TypeScript.Services.CompletionInfo) => {
-                if (completes != null) this.autoCompletePopup.showCompletions(completes.entries);
+            IDE.project.iSense.autoComplete(cursor, this.session.name, (err: any, completes: ts.CompletionEntryDetails[]) => {
+                this.autoCompletePopup.showCompletions(completes);
             });
         }
 
@@ -354,38 +353,38 @@ class SourceEditor extends qx.ui.core.Widget implements Editor /* qx.ui.embed.Ht
 
     private refactor() {
         var newName = prompt("Replace with");
-        if (! newName) return;
-        this.session.project.iSense.getInfoAtPosition("getReferencesAtPosition", this.session.name, this.getPosition(), (err, data:Cats.FileRange[]) => {
-            Cats.Commands.refactor(data,newName);
+        if (!newName) return;
+        this.session.project.iSense.getInfoAtPosition("getReferencesAtPosition", this.session.name, this.getPosition(), (err: any, data: Cats.FileRange[]) => {
+            Cats.Commands.refactor(data, newName);
         });
     }
 
     private findReferences() {
-        return this.getInfoAt("getReferencesAtPosition");        
+        return this.getInfoAt("getReferencesAtPosition");
     }
 
     private findOccurences() {
-        return this.getInfoAt("getOccurrencesAtPosition");        
+        return this.getInfoAt("getOccurrencesAtPosition");
     }
 
 
     private findImplementors() {
-        return this.getInfoAt("getImplementorsAtPosition");        
+        return this.getInfoAt("getImplementorsAtPosition");
     }
 
-    private createContextMenuItem(name:string, fn:Function) {
+    private createContextMenuItem(name: string, fn: Function) {
         var button = new qx.ui.menu.Button(name);
         button.addListener("execute", fn)
         return button;
     }
-    
+
     private bookmark() {
         var name = prompt("please provide bookmark name");
         if (name) {
             var pos = this.getPosition();
             IDE.bookmarks.addData({
-                message:name, 
-                fileName:this.session.name, 
+                message: name,
+                fileName: this.session.name,
                 range: {
                     start: pos,
                     end: pos
@@ -393,7 +392,7 @@ class SourceEditor extends qx.ui.core.Widget implements Editor /* qx.ui.embed.Ht
             });
         }
     }
-    
+
     private createContextMenu() {
         var CMDS = Cats.Commands.CMDS;
         var menu = new qx.ui.menu.Menu();
@@ -408,19 +407,19 @@ class SourceEditor extends qx.ui.core.Widget implements Editor /* qx.ui.embed.Ht
         }
         menu.add(this.createContextMenuItem("Bookmark", this.bookmark.bind(this)));
         // menu.add(this.createContextMenuItem("Undo", () => {this.aceEditor.execCommand("undo")}));
-        
+
         this.setContextMenu(menu);
     }
-  
+
 
     private onMouseMove(ev: MouseEvent) {
-            if (this.getToolTip() && this.getToolTip().isSeeable()) this.getToolTip().exclude();
-            clearTimeout(this.mouseMoveTimer);
-            var elem = <HTMLElement>ev.srcElement;
-            if (elem.className !== "ace_content") return;
-            this.mouseMoveTimer = setTimeout(() => {
-                this.showToolTipAt(ev);
-            }, 800);
-        }
+        if (this.getToolTip() && this.getToolTip().isSeeable()) this.getToolTip().exclude();
+        clearTimeout(this.mouseMoveTimer);
+        var elem = <HTMLElement>ev.srcElement;
+        if (elem.className !== "ace_content") return;
+        this.mouseMoveTimer = setTimeout(() => {
+            this.showToolTipAt(ev);
+        }, 800);
+    }
 
 }

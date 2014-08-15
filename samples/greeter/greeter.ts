@@ -10,6 +10,9 @@ class Greeter {
      */
     constructor(message: string) {
         this.greeting = message;
+        var a = null;
+        var x = <a>123-23423488989{this.greeting}123</a>;
+        
     }
 
     /**

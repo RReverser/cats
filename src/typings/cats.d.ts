@@ -24,11 +24,6 @@ declare module Cats {
         params?:any;
     }
 
-    interface Map<T>  {
-        [index:string]:T;
-    }
-
-
     interface FileEntry {
         name: string; // Just the file/directory name without path
         fullName: string; // fullName including path
@@ -97,7 +92,13 @@ declare module Cats {
         column: number;
     }
 
-    class TypeInfo extends TypeScript.Services.TypeInfo {
+    class TypeInfo implements ts.TypeInfo {
+        memberName: ts.MemberName;
+        docComment: string;
+        fullSymbolName: string;
+        kind: string;
+        minChar: number;
+        limChar: number;
         description: string;
     }
 
@@ -106,7 +107,17 @@ declare module Cats {
         errors: FileRange[];
     }
 
-    class NavigateToItem extends TypeScript.Services.NavigateToItem {
+    class NavigateToItem implements ts.NavigateToItem {
+        name: string;
+        kind: string;
+        kindModifiers: string;
+        matchKind: string;
+        fileName: string;
+        minChar: number;
+        limChar: number;
+        additionalSpans: ts.SpanInfo[];
+        containerName: string;
+        containerKind: string;
         range: Range;
     }
     

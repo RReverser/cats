@@ -42,8 +42,9 @@ module Cats.TSWorker {
     class ISense {
 
         private maxErrors = 100;
-        ls: TypeScript.Services.ILanguageService;
+        ls: ts.LanguageService;
         private lsHost: LanguageServiceHost;
+        private documentRegistry: ts.DocumentRegistry;
         private projectDir:string;
 
         /**
@@ -52,8 +53,8 @@ module Cats.TSWorker {
          */ 
         constructor() {
             this.lsHost = new LanguageServiceHost();
-            // this.ls = new TypeScript.Services.TypeScriptServicesFactory().createLanguageService(this.lsHost);
-            this.ls = new TypeScript.Services.TypeScriptServicesFactory().createPullLanguageService(this.lsHost);
+            this.documentRegistry = ts.createDocumentRegistry();
+            this.ls = ts.createLanguageService(this.lsHost, this.documentRegistry);
         }
 
         /**
@@ -105,7 +106,7 @@ module Cats.TSWorker {
          * Convert Services to Cats NavigateToItems
          * @todo properly do this conversion
          */ 
-        private convertNavigateTo(items:TypeScript.Services.NavigateToItem[]):NavigateToItem[] {
+        private convertNavigateTo(items: ts.NavigateToItem[]): NavigateToItem[] {
             var results= <NavigateToItem[]>items;
             for (var i = 0; i < results.length; i++) {
                 var result = results[i];
@@ -118,11 +119,11 @@ module Cats.TSWorker {
          * Convert Services to Cats NavigateToItems
          * @todo properly do this conversion
          */ 
-        private convertNavigateTo2(fileName:string,items:TypeScript.TextSpan[]):Range[] {
+        private convertNavigateTo2(fileName:string,items: ts.OutliningSpan[]):Range[] {
             var result= new Array<Range>();
             for (var i = 0; i < items.length; i++) {
                 var item = items[i];
-                var entry  = this.getRange(fileName, item.start(), item.end());
+                var entry  = this.getRange(fileName, item.textSpan.start(), item.textSpan.end());
                 result.push(entry);
             }
             return result;
@@ -132,19 +133,18 @@ module Cats.TSWorker {
         /**
          * Convert the errors from a TypeScript format into Cats format 
          */ 
-        private convertErrors(errors: TypeScript.Diagnostic[], severity=Severity.Error) :Cats.FileRange[]{
+        private convertErrors(errors: ts.Diagnostic[], severity=Severity.Error): Cats.FileRange[] {
             
             if (!(errors && errors.length)) return [];
             
             var result:Cats.FileRange[] = [];
             errors.forEach((error) => {
-    
-                var r = this.getRange(error.fileName(), error.start(), error.start() + error.length());
+                var r = this.getRange(error.file.filename, error.start, error.start + error.length);
                 result.push({
                     range:r,
                     severity: severity,
-                    message:error.message(),
-                    fileName: error.fileName()
+                    message:error.messageText,
+                    fileName: error.file.filename
                 });             
             });
             return result;
@@ -205,7 +205,7 @@ module Cats.TSWorker {
                 try {
                     var emitOutput = this.ls.getEmitOutput(fileName);
                    
-                    emitOutput.outputFiles.forEach((file:TypeScript.OutputFile)=>{
+                    emitOutput.outputFiles.forEach((file: ts.OutputFile)=>{
                          result.push({
                             fileName : file.name,
                             content: file.text
@@ -213,7 +213,7 @@ module Cats.TSWorker {
                     });
                     
                     // No need to request other files if there is only one output file
-                    if (this.lsHost.getCompilationSettings().outFileOption) {
+                    if (this.lsHost.getCompilationSettings().out) {
                         break;
                     }
                 } catch(err) {/*ignore */}
@@ -233,8 +233,8 @@ module Cats.TSWorker {
         /**
          * Configure the compiler settings
          */ 
-        setCompilationSettings(options:{}):TypeScript.CompilationSettings {
-            var compOptions = new TypeScript.CompilationSettings();
+        setCompilationSettings(options: {[name: string]: any}): ts.CompilerOptions {
+            var compOptions: ts.CompilerOptions = {};
 
             // Do a quick mixin
             for (var i in options) {
@@ -284,10 +284,22 @@ module Cats.TSWorker {
         }
 
         getFormattedTextForRange(fileName: string, start: number, end: number):string {
-            var options = new TypeScript.Services.FormatCodeOptions();
+            var options: ts.FormatCodeOptions = {
+                IndentSize: 4,
+                TabSize: 4,
+                NewLineCharacter: "\n",
+                ConvertTabsToSpaces: true,
+                InsertSpaceAfterCommaDelimiter: true,
+                InsertSpaceAfterSemicolonInForStatements: true,
+                InsertSpaceBeforeAndAfterBinaryOperators: true,
+                InsertSpaceAfterKeywordsInControlFlowStatements: true,
+                InsertSpaceAfterFunctionKeywordForAnonymousFunctions: true,
+                InsertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis: false,
+                PlaceOpenBraceOnNewLineForFunctions: false,
+                PlaceOpenBraceOnNewLineForControlBlocks: false
+            };
             var result = this.getScriptContent(fileName);
             
-            options.NewLineCharacter = "\n";
             if (end === -1) end = result.length;
             
             var edits = this.ls.getFormattingEditsForRange(fileName, start, end, options);
@@ -342,10 +354,9 @@ module Cats.TSWorker {
             var pos = this.getPositionFromCursor(fileName, coord);
             if (!pos) return;
             var result = <TypeInfo>this.ls.getTypeAtPosition(fileName, pos);
-            if (result) result.description = TypeScript.MemberName.memberNameToString(result.memberName);
+            if (result) result.description = result.memberName.text;
             return result;
         }
-
 
         // Determine type of autocompletion
         private determineAutoCompleteType(source: string, pos: number) {
@@ -398,7 +409,7 @@ module Cats.TSWorker {
         public getInfoAtPosition(method: string, fileName: string, cursor: Cats.Position): Cats.FileRange[] {
             var pos = this.getPositionFromCursor(fileName, cursor);
             var result:Cats.FileRange[] = [];
-            var entries: TypeScript.Services.ReferenceEntry[] = this.ls[method](fileName, pos);
+            var entries: ts.ReferenceEntry[] = this.ls[method](fileName, pos);
             for (var i = 0; i < entries.length; i++) {
                 var ref = entries[i];
                 result.push({
@@ -410,7 +421,7 @@ module Cats.TSWorker {
             return result;
         }
 
-        public autoComplete(cursor: Cats.Position, fileName: string): TypeScript.Services.CompletionInfo {
+        public autoComplete(cursor: Cats.Position, fileName: string): ts.CompletionEntryDetails[] {
             var pos = this.getPositionFromCursor(fileName, cursor);
             var memberMode = false;
             var source = this.getScriptContent(fileName);
@@ -421,10 +432,10 @@ module Cats.TSWorker {
             }
             */
             // Lets find out what autocompletion there is possible		
-            var completions = this.ls.getCompletionsAtPosition(fileName, type.pos, type.memberMode) || <TypeScript.Services.CompletionInfo>{};
-            if (! completions.entries) completions.entries = []; // @Bug in TS
-            completions.entries.sort(caseInsensitiveSort); // Sort case insensitive
-            return completions;
+            var completions = this.ls.getCompletionsAtPosition(fileName, type.pos, type.memberMode);
+            var entries = completions && completions.entries || [];
+            entries.sort(caseInsensitiveSort); // Sort case insensitive
+            return entries.map(entry => this.ls.getCompletionEntryDetails(fileName, type.pos, entry.name));
         }
     }
 

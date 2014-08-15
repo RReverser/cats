@@ -162,13 +162,13 @@
             this.handler.bindKey("PageUp", () => { this.moveCursor(-10) });
             this.handler.bindKey("Esc", () => { this.hidePopup() });
             this.handler.bindKey("Return|Tab", () => {
-                var current = this.list.getSelection().getItem(0);;
+                var current = this.list.getSelection().getItem(0);
                 if (current) {
                     var inputText = this.getInputText()
                     for (var i = 0; i < inputText.length; i++) {
                         this.editor.remove("left");
                     }
-                    var label = current.getLabel();
+                    var label = current.getLabel().replace(/[(:].*$/, "");
                     this.editor.insert(label);
                 }
                 this.hidePopup();
@@ -189,7 +189,8 @@
                 case "interface":return iconPath + "interface.png";
                 case "enum": return iconPath + "enum.png"; 
                 case "class":return iconPath + "class.png";
-                case "var":return iconPath + "variable.png";
+                case "var":
+                case "property": return iconPath + "variable.png";
                 default: return iconPath + "method.png";
             }            
         }
@@ -199,24 +200,16 @@
          * Show the popup and make sure the keybinding is in place
          * 
          */ 
-        private showPopup(coords,completions:TypeScript.Services.CompletionEntry[]) {
+        private showPopup(coords: any, completions: ts.CompletionEntryDetails[]) {
             this.editor.keyBinding.addKeyboardHandler(this.handler);
             this.moveTo(coords.pageX, coords.pageY+20);
             
-            
-             var rawData = [];
-             completions.forEach((completion) => {
-                  var extension="";
-                  if (completion.kind === "method") extension = "()"
-                  rawData.push({
-                     label: completion.name + extension,
-                     icon: completion.kind
-                  });
-              });
+            var rawData = completions.map((completion) => ({
+                label: completion.name + (completion.kind === "method" ? "" : ": ") + completion.type,
+                icon: completion.kind
+            }));
           
             this.listModel = qx.data.marshal.Json.createModel(rawData, false);
-            
-            
 
             this.list.setModel(this.listModel);
             this.updateFilter();
@@ -276,7 +269,7 @@
         }
 
      
-        showCompletions(completions:TypeScript.Services.CompletionEntry[]) {
+        showCompletions(completions: ts.CompletionEntryDetails[]) {
             if (this.list.isSeeable()  || (completions.length === 0)) return;            
             console.debug("Received completions: " + completions.length);
             var cursor = this.editor.getCursorPosition();
